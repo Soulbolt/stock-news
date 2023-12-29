@@ -4,24 +4,46 @@ import requests
 
 load_dotenv()
 
-API_KEY = os.getenv('STOCKS_API_KEY')
+STOCKS_API_KEY = os.getenv('STOCKS_API_KEY')
+NEWS_API_KEY = os.getenv('NEWS_API_KEY')
+
 STOCK = "TSLA"
 COMPANY_NAME = "Tesla Inc"
-END_POINT = "https://www.alphavantage.co/query?"
-parameters = {
+STOCKS_END_POINT = "https://www.alphavantage.co/query?"
+sep_parameters = {
     "function": "TIME_SERIES_INTRADAY",
     "symbol": "TSLA",
     "interval": "60min",
     "month": "2023-11",
     "outputsize": "compact",
-    "apikey": API_KEY,
+    "apikey": STOCKS_API_KEY,
+}
+NEWS_END_POINT = "https://newsapi.org/v2/top-headlines?"
+ned_parameters = {
+    "q": "tesla",
+    "from": "2023-11-30",
+    "sortBy": "publishedAt",
+    "apikey": NEWS_API_KEY,
 }
 ## STEP 1: Use https://www.alphavantage.co
 # When STOCK price increase/decreases by 5% between yesterday and the day before yesterday then print("Get News").
-response = requests.get(url=END_POINT, params= parameters)
-response.raise_for_status()
-data_news = response.json()
-print(data_news["Time Series (60min)"]["2023-11-30 19:00:00"]["4. close"])
+response1 = requests.get(url=STOCKS_END_POINT, params= sep_parameters)
+response1.raise_for_status()
+data_stocks = response1.json()
+# Get two different dates closing data
+day1_stock_close = data_stocks["Time Series (60min)"]["2023-11-30 19:00:00"]["4. close"]
+day2_stock_close = data_stocks["Time Series (60min)"]["2023-11-29 19:00:00"]["4. close"]
+# Get percentage difference
+percentage_to_compare = (float(day1_stock_close)/float(day2_stock_close))* 100
+
+response2 = requests.get(url=NEWS_END_POINT, params=ned_parameters)
+response2.raise_for_status()
+data_news = response2.json()
+# print(data_news)
+
+# check if stock difference is up or down by 5%
+if percentage_to_compare <= 105 and percentage_to_compare >=95:
+    print(data_news["articles"]) 
 
 ## STEP 2: Use https://newsapi.org
 # Instead of printing ("Get News"), actually get the first 3 news pieces for the COMPANY_NAME. 
