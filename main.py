@@ -1,57 +1,72 @@
 import os
 from dotenv import load_dotenv
 import requests
+from twilio.rest import Client
 
 load_dotenv()
 
 STOCKS_API_KEY = os.getenv('STOCKS_API_KEY')
 NEWS_API_KEY = os.getenv('NEWS_API_KEY')
 
-STOCK = "TSLA"
+STOCK_NAME = "TSLA"
 COMPANY_NAME = "Tesla Inc"
 STOCKS_END_POINT = "https://www.alphavantage.co/query?"
 sep_parameters = {
-    "function": "TIME_SERIES_INTRADAY",
-    "symbol": "TSLA",
-    "interval": "60min",
-    "month": "2023-11",
-    "outputsize": "compact",
+    "function": "TIME_SERIES_DAILY",
+    "symbol": STOCK_NAME,
     "apikey": STOCKS_API_KEY,
 }
-NEWS_END_POINT = "https://newsapi.org/v2/top-headlines?"
+NEWS_END_POINT = "https://newsapi.org/v2/everything?"
 ned_parameters = {
-    "q": "tesla",
-    "from": "2023-11-30",
-    "sortBy": "publishedAt",
+    "language": "en",
+    "qinTitle": COMPANY_NAME,
     "apikey": NEWS_API_KEY,
 }
 ## STEP 1: Use https://www.alphavantage.co
 # When STOCK price increase/decreases by 5% between yesterday and the day before yesterday then print("Get News").
-response1 = requests.get(url=STOCKS_END_POINT, params= sep_parameters)
-response1.raise_for_status()
-data_stocks = response1.json()
+stocks_response = requests.get(url=STOCKS_END_POINT, params= sep_parameters)
+stocks_response.raise_for_status()
+data_stocks = stocks_response.json()["Time Series (Daily)"]
 # Get two different dates closing data
-day1_stock_close = data_stocks["Time Series (60min)"]["2023-11-30 19:00:00"]["4. close"]
-day2_stock_close = data_stocks["Time Series (60min)"]["2023-11-29 19:00:00"]["4. close"]
+data_list = [value for (key, value) in data_stocks.items()]
+yesterday_data = data_list[0]
+yesterday_closing_price = yesterday_data["4. close"]
+day_before_yesterday_data = data_list[1]
+day_before_yesterday_closing_price = yesterday_data["4. close"]
+
+difference = float(yesterday_closing_price) - float(day_before_yesterday_closing_price)
+up_down = None
+if difference > 0:
+    up_down = "🔼"
+else:
+    up_down = "🔽"
+
 # Get percentage difference
-percentage_to_compare = (float(day1_stock_close)/float(day2_stock_close))* 100
+percentage = round((difference/float(yesterday_closing_price)) * 100)
 
-response2 = requests.get(url=NEWS_END_POINT, params=ned_parameters)
-response2.raise_for_status()
-data_news = response2.json()
-# print(data_news)
-
-# check if stock difference is up or down by 5%
-if percentage_to_compare <= 105 and percentage_to_compare >=95:
-    print(data_news["articles"]) 
 
 ## STEP 2: Use https://newsapi.org
 # Instead of printing ("Get News"), actually get the first 3 news pieces for the COMPANY_NAME. 
+# check if stock difference is up or down by 5%
+if percentage <= 5 and percentage >= -5:
+    news_response = requests.get(url=NEWS_END_POINT, params=ned_parameters)
+    news_response.raise_for_status()
+    articles = news_response.json()["articles"]
+    first_three_articles = articles[:3]
 
 ## STEP 3: Use https://www.twilio.com
 # Send a seperate message with the percentage change and each article's title and description to your phone number. 
+formatted_articles = [f"{STOCK_NAME}: {up_down}{percentage}%\nHeadline: {aritcle['title']}. \nBrief: {aritcle['description']}" for aritcle in first_three_articles]
 
+account_sid = os.environ.get('TWILIO_ACCOUNT_SID')
+auth_token = os.environ.get('TWILIO_AUTH_TOKEN')
 
+client = Client(account_sid, auth_token)
+
+for article in formatted_articles:
+    message = client.messages.create(from_=os.environ.get('TWILIO_PHONE_NUMBER'),
+                        to=os.environ.get('CELL_PHONE_NUMBER'),
+                        body=article)
 #Optional: Format the SMS message like this: 
 """
 TSLA: 🔺2%
